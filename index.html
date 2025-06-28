@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StonkSleuth: Uncover SEC Filings</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Dark blue-gray background */
+            color: #d1d5db; /* Light gray text */
+        }
+        .navbar {
+            background-color: rgba(17, 24, 39, 0.8);
+            backdrop-filter: blur(10px);
+        }
+        .card {
+            background-color: #1f2937; /* Darker card background */
+            border: 1px solid #374151;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+        }
+        .info-card {
+            background-color: #1e40af;
+            color: #e0f2fe;
+        }
+        .btn {
+            transition: all 0.3s ease;
+        }
+        .btn:hover {
+            transform: scale(1.05);
+        }
+        .loader {
+            border-top-color: #3498db;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .filing-table th, .filing-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #374151;
+        }
+        .filing-table th {
+            background-color: #374151;
+            color: #f3f4f6;
+        }
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 220px;
+            background-color: #374151;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 10px;
+            position: absolute;
+            z-index: 10;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -110px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        #autocomplete-list {
+            position: absolute;
+            border: 1px solid #374151;
+            background-color: #1f2937;
+            width: 100%;
+            z-index: 99;
+            max-height: 200px;
+            overflow-y: auto;
+            border-radius: 0 0 12px 12px;
+        }
+        #autocomplete-list div {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #374151;
+        }
+        #autocomplete-list div:hover {
+            background-color: #374151;
+        }
+        #autocomplete-list div:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- Navigation -->
+    <nav id="navbar" class="navbar sticky top-0 z-50 p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fas fa-search-dollar text-2xl text-cyan-400"></i>
+                <h1 class="text-2xl font-bold text-white tracking-wider">StonkSleuth</h1>
+            </div>
+            <div class="hidden md:flex items-center space-x-8">
+                <a href="#" id="home-link" class="text-gray-300 hover:text-cyan-400 transition">Home</a>
+                <a href="#" id="top100-link" class="text-gray-300 hover:text-cyan-400 transition">Top 100</a>
+                <a href="#" id="random-link" class="text-gray-300 hover:text-cyan-400 transition btn bg-cyan-600 px-4 py-2 rounded-full">Random Company</a>
+            </div>
+            <div class="md:hidden">
+                 <button id="mobile-menu-button" class="text-white focus:outline-none">
+                    <i class="fas fa-bars text-2xl"></i>
+                </button>
+            </div>
+        </div>
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="hidden md:hidden mt-4">
+            <a href="#" id="mobile-home-link" class="block py-2 px-4 text-sm text-gray-300 hover:bg-gray-700 rounded">Home</a>
+            <a href="#" id="mobile-top100-link" class="block py-2 px-4 text-sm text-gray-300 hover:bg-gray-700 rounded">Top 100</a>
+            <a href="#" id="mobile-random-link" class="block py-2 px-4 text-sm text-gray-300 hover:bg-gray-700 rounded">Random Company</a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container mx-auto p-4 md:p-8">
+
+        <!-- Search Section -->
+        <section id="search-section" class="text-center mb-12">
+            <h2 class="text-4xl md:text-5xl font-bold text-white mb-4">Uncover Company Secrets</h2>
+            <p class="text-lg text-gray-400 mb-8 max-w-2xl mx-auto">Instantly access public company filings from the SEC. Start typing a company name or enter its CIK to begin.</p>
+            <div class="max-w-xl mx-auto">
+                <div id="search-container" class="relative">
+                    <input type="text" id="search-input" class="w-full bg-gray-700 border border-gray-600 text-white rounded-full py-3 px-6 focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Enter Company Name or CIK (e.g., Apple or 320193)">
+                    <button id="search-btn" class="absolute right-2 top-1/2 -translate-y-1/2 btn bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 px-6 rounded-full">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    <div id="autocomplete-list" class="hidden"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Info Card -->
+        <section id="info-section" class="mb-12">
+            <div class="info-card max-w-2xl mx-auto p-6 rounded-lg shadow-lg">
+                <div id="initial-loader" class="text-center">
+                    <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-8 w-8 mx-auto mb-2"></div>
+                    <p>Loading company directory...</p>
+                </div>
+                <div id="info-content" class="hidden">
+                    <h3 class="font-bold text-xl mb-2 flex items-center"><i class="fas fa-info-circle mr-2"></i>How to Search</h3>
+                    <p>You can now search by <strong>Company Name</strong> or by <strong>Central Index Key (CIK)</strong>. Start typing a name to see suggestions, or enter a 10-digit CIK directly. The CIK is a unique number the SEC uses to identify companies.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dynamic Content Section -->
+        <section id="content-display">
+            <!-- Loader -->
+            <div id="loader" class="hidden text-center">
+                <div class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-32 w-32 mx-auto"></div>
+                <p class="mt-4 text-lg text-gray-400">Fetching Filings...</p>
+            </div>
+            <!-- Error Message -->
+            <div id="error-message" class="hidden text-center text-red-400 bg-red-900/50 p-4 rounded-lg"></div>
+            <!-- Results -->
+            <div id="results-container"></div>
+        </section>
+
+         <!-- Top 100 Companies Section -->
+        <section id="top100-section" class="hidden">
+            <h2 class="text-3xl font-bold text-white mb-6 text-center">Top 100 Global Companies</h2>
+            <div id="top100-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <!-- Company cards will be injected here -->
+            </div>
+        </section>
+
+    </main>
+    
+    <footer class="text-center p-6 mt-12 border-t border-gray-700">
+        <p class="text-gray-500">Data sourced from the U.S. Securities and Exchange Commission (SEC). For educational and informational purposes only.</p>
+        <p class="text-gray-600 text-sm">StonkSleuth is not affiliated with the SEC.</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const searchInput = document.getElementById('search-input');
+            const searchBtn = document.getElementById('search-btn');
+            const autocompleteList = document.getElementById('autocomplete-list');
+            const searchSection = document.getElementById('search-section');
+            const infoSection = document.getElementById('info-section');
+            const initialLoader = document.getElementById('initial-loader');
+            const infoContent = document.getElementById('info-content');
+            const top100Section = document.getElementById('top100-section');
+            const contentDisplay = document.getElementById('content-display');
+            const resultsContainer = document.getElementById('results-container');
+            const loader = document.getElementById('loader');
+            const errorMessage = document.getElementById('error-message');
+            const homeLink = document.getElementById('home-link');
+            const top100Link = document.getElementById('top100-link');
+            const randomLink = document.getElementById('random-link');
+            const mobileMenuButton = document.getElementById('mobile-menu-button');
+            const mobileMenu = document.getElementById('mobile-menu');
+            const mobileHomeLink = document.getElementById('mobile-home-link');
+            const mobileTop100Link = document.getElementById('mobile-top100-link');
+            const mobileRandomLink = document.getElementById('mobile-random-link');
+            const top100Grid = document.getElementById('top100-grid');
+
+            let companyData = [];
+
+            // --- Fetch SEC company ticker data for name search ---
+            async function fetchAllCompanies() {
+                try {
+                    const targetUrl = 'https://www.sec.gov/files/company_tickers.json';
+                    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+                    const response = await fetch(proxyUrl);
+                    const data = await response.json();
+                    // The data is an object with keys as indices. Convert it to an array.
+                    companyData = Object.values(data).map(item => ({
+                        cik: item.cik_str,
+                        name: item.title,
+                        ticker: item.ticker
+                    }));
+                    initialLoader.classList.add('hidden');
+                    infoContent.classList.remove('hidden');
+                } catch (error) {
+                    console.error('Failed to load company directory:', error);
+                    initialLoader.innerHTML = '<p class="text-red-400">Could not load company directory. Search by CIK only.</p>';
+                }
+            }
+
+            // --- API Handling for individual company filings ---
+            async function fetchCompanyData(cik) {
+                showLoader();
+                clearResults();
+                const paddedCik = cik.toString().padStart(10, '0');
+                const targetUrl = `https://data.sec.gov/submissions/CIK${paddedCik}.json`;
+                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+
+                try {
+                    const response = await fetch(proxyUrl);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    displayResults(data);
+                } catch (error) {
+                    showError(`Failed to fetch data for CIK ${cik}. The SEC API may be unavailable, the CIK is invalid, or the CORS proxy is down. Please try again.`);
+                    console.error("Fetch Error:", error);
+                } finally {
+                    hideLoader();
+                }
+            }
+            
+            // --- Autocomplete Logic ---
+            searchInput.addEventListener('input', () => {
+                const query = searchInput.value.toLowerCase();
+                if (query.length < 2 || /^\d+$/.test(query)) {
+                    autocompleteList.innerHTML = '';
+                    autocompleteList.classList.add('hidden');
+                    return;
+                }
+
+                const matches = companyData.filter(company => company.name.toLowerCase().includes(query)).slice(0, 10);
+                
+                if (matches.length > 0) {
+                    autocompleteList.innerHTML = matches.map(match => 
+                        `<div data-cik="${match.cik}" data-name="${match.name}">
+                            <strong>${match.name}</strong> (${match.ticker})
+                         </div>`
+                    ).join('');
+                    autocompleteList.classList.remove('hidden');
+                } else {
+                    autocompleteList.classList.add('hidden');
+                }
+            });
+            
+            autocompleteList.addEventListener('click', (e) => {
+                const target = e.target.closest('div');
+                if (target) {
+                    const cik = target.dataset.cik;
+                    const name = target.dataset.name;
+                    searchInput.value = name; // Put full name in search bar
+                    autocompleteList.innerHTML = '';
+                    autocompleteList.classList.add('hidden');
+                    fetchCompanyData(cik);
+                }
+            });
+            
+            // Hide autocomplete when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!document.getElementById('search-container').contains(e.target)) {
+                    autocompleteList.classList.add('hidden');
+                }
+            });
+
+            // --- Search Button Logic ---
+            searchBtn.addEventListener('click', () => {
+                const query = searchInput.value.trim();
+                autocompleteList.classList.add('hidden');
+                if (/^\d+$/.test(query)) { // If it's a number, assume CIK
+                    fetchCompanyData(query);
+                } else if (query) {
+                    // If text, try to find an exact match first
+                    const exactMatch = companyData.find(c => c.name.toLowerCase() === query.toLowerCase());
+                    if (exactMatch) {
+                        fetchCompanyData(exactMatch.cik);
+                    } else {
+                        showError("Please select a company from the suggestions or enter a valid 10-digit CIK.");
+                    }
+                } else {
+                    showError("Please enter a company name or CIK.");
+                }
+            });
+
+            searchInput.addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') {
+                    searchBtn.click();
+                }
+            });
+
+
+            // --- UI Manipulation ---
+            function showLoader() {
+                loader.classList.remove('hidden');
+                errorMessage.classList.add('hidden');
+                infoSection.classList.add('hidden');
+            }
+
+            function hideLoader() {
+                loader.classList.add('hidden');
+            }
+
+            function showError(message) {
+                errorMessage.textContent = message;
+                errorMessage.classList.remove('hidden');
+                // Don't show the main info section on error, just the message.
+            }
+
+            function clearResults() {
+                resultsContainer.innerHTML = '';
+                errorMessage.classList.add('hidden');
+            }
+
+            function displayResults(data) {
+                clearResults();
+                infoSection.classList.add('hidden');
+                const recentFilings = data.filings.recent;
+                const headerHTML = `
+                    <div class="card p-6 mb-8 text-center">
+                        <h2 class="text-3xl font-bold text-white">${data.name} (${data.tickers.join(', ')})</h2>
+                        <p class="text-gray-400 mt-2">
+                            <span class="tooltip">CIK: ${data.cik}<span class="tooltiptext">The Central Index Key (CIK) is a unique SEC identifier.</span></span> | 
+                            <span class="tooltip">SIC: ${data.sic}<span class="tooltiptext">The Standard Industrial Classification (SIC) code identifies the company's industry.</span></span> 
+                            (${data.sicDescription})
+                        </p>
+                        <p class="text-gray-400">Location: ${data.addresses.mailing.city}, ${data.addresses.mailing.stateOrCountry}</p>
+                        <p class="text-gray-400 italic mt-2">${data.description || 'No description available.'}</p>
+                        <div class="mt-4">
+                            <a href="https://www.sec.gov/edgar/browse/?CIK=${data.cik}" target="_blank" class="text-cyan-400 hover:underline">View All Filings on SEC.gov &rarr;</a>
+                        </div>
+                    </div>`;
+                const filingsHTML = `
+                    <div class="card p-6">
+                        <h3 class="text-2xl font-bold text-white mb-4">Recent Filings</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left filing-table">
+                                <thead><tr><th>Filed</th><th>Form</th><th>Description</th><th>Documents</th></tr></thead>
+                                <tbody>
+                                    ${recentFilings.form.map((form, i) => `
+                                        <tr class="hover:bg-gray-700">
+                                            <td>${recentFilings.filingDate[i]}</td>
+                                            <td>${form}</td>
+                                            <td class="max-w-xs truncate" title="${recentFilings.primaryDocDescription[i] || ''}">${recentFilings.primaryDocDescription[i] || 'N/A'}</td>
+                                            <td><a href="https://www.sec.gov/Archives/edgar/data/${data.cik}/${recentFilings.accessionNumber[i].replace(/-/g, '')}/${recentFilings.primaryDocument[i]}" target="_blank" class="text-cyan-400 hover:text-cyan-300">View Document</a></td>
+                                        </tr>`).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>`;
+                resultsContainer.innerHTML = headerHTML + filingsHTML;
+            }
+
+            // --- Top 100 Setup ---
+            const topCompanies = [
+                { name: 'Apple Inc.', cik: '320193' }, { name: 'Microsoft Corp.', cik: '789019' }, { name: 'Amazon.com, Inc.', cik: '1018724' }, { name: 'Alphabet Inc.', cik: '1652044' }, { name: 'NVIDIA Corp.', cik: '1045810' }, { name: 'Meta Platforms, Inc.', cik: '1326801' }, { name: 'Tesla, Inc.', cik: '1318605' }, { name: 'Berkshire Hathaway', cik: '1067983' }, { name: 'Eli Lilly and Co', cik: '59478' }, { name: 'Visa Inc.', cik: '1403161' }
+            ];
+            function populateTop100() {
+                top100Grid.innerHTML = topCompanies.map(company => `
+                    <div class="card p-4 text-center rounded-lg flex flex-col justify-center items-center cursor-pointer" data-cik="${company.cik}">
+                        <h4 class="font-bold text-lg text-white">${company.name}</h4>
+                        <p class="text-sm text-gray-400">CIK: ${company.cik}</p>
+                    </div>`).join('');
+                top100Grid.querySelectorAll('.card').forEach(card => {
+                    card.addEventListener('click', () => {
+                        showSearchView();
+                        fetchCompanyData(card.dataset.cik);
+                        const matchedCompany = topCompanies.find(c => c.cik === card.dataset.cik);
+                        searchInput.value = matchedCompany.name;
+                    });
+                });
+            }
+
+            // --- Navigation Logic ---
+            function showSearchView() {
+                searchSection.classList.remove('hidden');
+                infoSection.classList.remove('hidden');
+                contentDisplay.classList.remove('hidden');
+                top100Section.classList.add('hidden');
+                clearResults();
+                infoContent.classList.contains('hidden') ? initialLoader.classList.remove('hidden') : infoSection.classList.remove('hidden');
+            }
+            function showTop100View() {
+                searchSection.classList.add('hidden');
+                infoSection.classList.add('hidden');
+                contentDisplay.classList.add('hidden');
+                top100Section.classList.remove('hidden');
+            }
+            homeLink.addEventListener('click', (e) => { e.preventDefault(); showSearchView(); });
+            top100Link.addEventListener('click', (e) => { e.preventDefault(); showTop100View(); });
+            randomLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                const randomCompany = topCompanies[Math.floor(Math.random() * topCompanies.length)];
+                showSearchView();
+                searchInput.value = randomCompany.name;
+                fetchCompanyData(randomCompany.cik);
+            });
+            mobileMenuButton.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
+            mobileHomeLink.addEventListener('click', (e) => { e.preventDefault(); showSearchView(); mobileMenu.classList.add('hidden'); });
+            mobileTop100Link.addEventListener('click', (e) => { e.preventDefault(); showTop100View(); mobileMenu.classList.add('hidden'); });
+            mobileRandomLink.addEventListener('click', (e) => { e.preventDefault(); randomLink.click(); mobileMenu.classList.add('hidden'); });
+
+            // --- Initial Load ---
+            fetchAllCompanies();
+            populateTop100();
+            showSearchView();
+        });
+    </script>
+</body>
+</html>
